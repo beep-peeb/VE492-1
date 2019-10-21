@@ -60,6 +60,8 @@ class ReflexAgent(Agent):
         newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
 
         "*** YOUR CODE HERE ***"
+        """for ghost in newGhostStates:
+            print(ghost.getPosition())"""
 
         if action == "Stop":
             return -50
@@ -75,8 +77,6 @@ class ReflexAgent(Agent):
         if distance1 < 5 and distance1 > 0:
             newscore = newscore - 5/distance1
 
-        elif distance1:
-            nescore = newscore + distance1
         # the longer distance, the smaller effect
 
         foodlist = newFood.asList()
@@ -237,6 +237,8 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
                 action = actions
 
             if v > beta:
+                #why not >=
+                #on the slide it should be >= however in the test case would show wrong answer
                 return v
 
             alpha = max(alpha,v)
@@ -269,6 +271,7 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
             v = min(v,minv)
 
             if v < alpha:
+                #why not <=
                 return v
             beta = min(beta,v)
         return v
@@ -327,8 +330,9 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         for action in ActionSet:
             nextState.append(gameState.generateSuccessor(index,action))
 
-        if index!=ghostNum:
-            for next in nextState:
+        for next in nextState:
+            #first define the state then define the value, bug fixed
+            if index!=ghostNum:
                 value = value + chance*self.expectimaximum(next,depth,ghostNum,index+1)
             else:
                 if depth!=self.depth:
@@ -360,21 +364,31 @@ def betterEvaluationFunction(currentGameState):
     food = newFood.asList()
     for eatfood in food:
         foodlist.append(manhattanDistance(eatfood,newPos))
+
     # the effect of ghost
     for ghost in newGhostStates:
-        if manhattanDistance(newPos,ghost) > 0:
+        #print(ghost)
+        if manhattanDistance(newPos,ghost.getPosition()) > 0:
+            if len(foodlist)> 0:
             #eating the closet food
-            score = score + 10/min(foodlist)
-        else:
-            if ghost.scaredTimer > 0:
-                score = score + 5/manhattanDistance(newPos,ghost)
+                if manhattanDistance(newPos,ghost.getPosition())==0:
+                    score = -score*0.1
+                else:
+                    score = score + 10/min(foodlist)
             else:
-                score = score + 10/manhattanDistance(newPos,ghost)
+                if ghost.scaredTimer > 0:
+                    #scared ghosts
+                    score = score + 5/manhattanDistance(newPos,ghost.getPosition())
+                else:
+                    #run from ghosts
+                    if manhattanDistance(newPos,ghost.getPosition()) == 0:
+                        score = -score*0.1
+                    else:
+                        score = score - 10/manhattanDistance(newPos,ghost.getPosition())
 
+    if newPos in foodlist:
+        score = 1.1*score
     return score
-
-
-
 
     util.raiseNotDefined()
 
