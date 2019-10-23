@@ -1,8 +1,11 @@
 from util import manhattanDistance
-from game import Directions
+from game import Directions, Actions
 import random, util
 
 from game import Agent
+import search
+from search import bfs
+from search import astar
 
 
 class ReflexAgent(Agent):
@@ -352,46 +355,165 @@ def betterEvaluationFunction(currentGameState):
     """
     "*** YOUR CODE HERE ***"
 
+    from search import bfs
+
     #new information
     newPos = currentGameState.getPacmanPosition()
     newFood = currentGameState.getFood()
     newGhostStates = currentGameState.getGhostStates()
     newScaredTimes = [ghostState.scaredTimer for ghostState in newGhostStates]
     score = currentGameState.getScore()
-
+    
     #food storing
     foodlist = []
     food = newFood.asList()
     for eatfood in food:
-        foodlist.append(manhattanDistance(eatfood,newPos))
+        foodlist.append(mazeDistance(eatfood,newPos,currentGameState))
 
     # the effect of ghost
     for ghost in newGhostStates:
         #print(ghost)
-        if manhattanDistance(newPos,ghost.getPosition()) > 0:
+        if mazeDistance(newPos,ghost.getPosition(),currentGameState) > 0:
             if len(foodlist)> 0:
             #eating the closet food
-                if manhattanDistance(newPos,ghost.getPosition())==0:
-                    score = -score*0.1
+                if mazeDistance(newPos,ghost.getPosition(),currentGameState)==0:
+                    score = -score
                 else:
                     score = score + 10/min(foodlist)
             else:
                 if ghost.scaredTimer > 0:
                     #scared ghosts
-                    score = score + 5/manhattanDistance(newPos,ghost.getPosition())
+                    score = score + 5/mazeDistance(newPos,ghost.getPosition(),currentGameState)
                 else:
-                    #run from ghosts
-                    if manhattanDistance(newPos,ghost.getPosition()) == 0:
-                        score = -score*0.1
-                    else:
-                        score = score - 10/manhattanDistance(newPos,ghost.getPosition())
+                    score = score - 10/mazeDistance(newPos,ghost.getPosition(),currentGameState)
 
-    if newPos in foodlist:
-        score = 1.1*score
     return score
 
     util.raiseNotDefined()
 
+class PositionSearchProblem(search.SearchProblem):
+    """
+    A search problem defines the state space, start state, goal test, successor
+    function and cost function.  This search problem can be used to find paths
+    to a particular point on the pacman board.
+
+    The state space consists of (x,y) positions in a pacman game.
+
+    Note: this search problem is fully specified; you should NOT change it.
+    """
+
+    def __init__(self, gameState, costFn = lambda x: 1, goal=(1,1), start=None, warn=True, visualize=True):
+        """
+        Stores the start and goal.
+
+        gameState: A GameState object (pacman.py)
+        costFn: A function from a search state (tuple) to a non-negative number
+        goal: A position in the gameState
+        """
+        self.walls = gameState.getWalls()
+        self.startState = gameState.getPacmanPosition()
+        if start != None: self.startState = start
+        self.goal = goal
+        self.costFn = costFn
+        self.visualize = visualize
+        if warn and (gameState.getNumFood() != 1 or not gameState.hasFood(*goal)):
+            print('Warning: this does not look like a regular search maze')
+
+        # For display purposes
+        self._visited, self._visitedlist, self._expanded = {}, [], 0 # DO NOT CHANGE
+
+    def getStartState(self):
+        return self.startState
+
+    def isGoalState(self, state):
+        isGoal = state == self.goal
+
+        # For display purposes only
+        if isGoal and self.visualize:
+            self._visitedlist.append(state)
+            import __main__
+            if '_display' in dir(__main__):
+                if 'drawExpandedCells' in dir(__main__._display): #@UndefinedVariable
+                    __main__._display.drawExpandedCells(self._visitedlist) #@UndefinedVariable
+
+        return isGoal
+
+    def getSuccessors(self, state):
+        """
+        Returns successor states, the actions they require, and a cost of 1.
+
+         As noted in search.py:
+             For a given state, this should return a list of triples,
+         (successor, action, stepCost), where 'successor' is a
+         successor to the current state, 'action' is the action
+         required to get there, and 'stepCost' is the incremental
+         cost of expanding to that successor
+        """
+
+        successors = []
+        for action in [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]:
+            x,y = state
+            dx, dy = Actions.directionToVector(action)
+            nextx, nexty = int(x + dx), int(y + dy)
+            if not self.walls[nextx][nexty]:
+                nextState = (nextx, nexty)
+                cost = self.costFn(nextState)
+                successors.append( ( nextState, action, cost) )
+
+        # Bookkeeping for display purposes
+        self._expanded += 1 # DO NOT CHANGE
+        if state not in self._visited:
+            self._visited[state] = True
+            self._visitedlist.append(state)
+
+        return successors
+
+    def getCostOfActions(self, actions):
+        """
+        Returns the cost of a particular sequence of actions. If those actions
+        include an illegal move, return 999999.
+        """
+        if actions == None: return 999999
+        x,y= self.getStartState()
+        cost = 0
+        for action in actions:
+            # Check figure out the next state and see whether its' legal
+            dx, dy = Actions.directionToVector(action)
+            x, y = int(x + dx), int(y + dy)
+            if self.walls[x][y]: return 999999
+            cost += self.costFn((x,y))
+        return cost
+
+
+def mazeDistance(point1, point2, gameState):
+    """
+    Returns the maze distance between any two points, using the search functions
+    you have already built. The gameState can be any game state -- Pacman's
+    position in that state is ignored.
+
+    Example usage: mazeDistance( (2,4), (5,6), gameState)
+
+    This might be a useful helper function for your ApproximateSearchAgent.
+    """
+    x1, y1 = point1
+    x2, y2 = point2
+    x1 = int(x1)
+    x2 = int(x2)
+    y1 = int(y1)
+    y2 = int(y2)
+
+    walls = gameState.getWalls()
+    assert not walls[x1][y1], 'point1 is a wall: ' + str(point1)
+    assert not walls[x2][y2], 'point2 is a wall: ' + str(point2)
+    prob = PositionSearchProblem(gameState, start=(x1,y1), goal=(x2,y2), warn=False, visualize=False)
+    return len(search.astar(prob,manhattanHeuristic))
+
+def manhattanHeuristic(position, problem, info={}):
+    "The Manhattan distance heuristic for a PositionSearchProblem"
+    xy1 = position
+    xy2 = problem.goal
+    return abs(xy1[0] - xy2[0]) + abs(xy1[1] - xy2[1])
 
 # Abbreviation
 better = betterEvaluationFunction
+
